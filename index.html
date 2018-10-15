@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset=utf-8 />
+  <title>Average Rent Prices in US</title>
+  <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" />
+  <link href='http://fonts.googleapis.com/css?family=Lato' rel='stylesheet' type='text/css'>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: whitesmoke;
+      font-family: Lato, sans-serif;
+      color: #0D0000;
+    }
+
+    header {
+      width: 80%;
+      margin: 10px auto 10px auto;
+    }
+
+    h1 {
+      display: inline-block;
+      margin-right: 20px;
+      color: #001323;
+    }
+
+    h2 {
+      display: inline-block;
+      color: #001323;
+    }
+
+    #map {
+      width: 80%;
+      height: 540px;
+      margin: 10px 10%;
+      background: black;
+      border: 2px solid #dddedf;
+    }
+
+    footer {
+      padding: 6px 10%;
+      width: 80%;
+    }
+
+    p {
+      font-size: 1em;
+      color: #001323;
+    }
+
+    .legend {
+      padding: 6px 8px;
+      font-size: 1em;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+      border-radius: 5px;
+    }
+
+    .legend h3 {
+      font-size: 1.1em;
+      font-weight: normal;
+      color: #001323;
+      margin: 0 0 10px 0;
+    }
+
+    .legend span {
+      width: 20px;
+      height: 20px;
+      float: left;
+      margin: 0 10px 4px 0;
+    }
+
+    .legend label {
+      font-size: 1.1em;
+    }
+
+    .legend label:after {
+      content: '';
+      display: block;
+      clear: both;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Map Title</h1>
+  </header>
+
+  <div id='map'></div>
+
+  <footer>
+    <p>Data drawn from the the <a href='https://factfinder.census.gov'>American FactFinder</a> with US county polygons downloaded from the <a href='https://www.census.gov/geo/maps-data/data/cbf/cbf_counties.html'>US Census Cartographic Boundary Shapefiles</a>.</p>
+    <p>See my projects on GitHub: <a href="https://github.com/jeremy-deischer">Jeremy Deischer</a></p>
+    <p>Follow me on Twitter: <a href="https://twitter.com/JeremyDeischer">@JeremyDeischer</a></p>
+  </footer>
+
+
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/simple-statistics@6.1.0/dist/simple-statistics.min.js"></script>
+
+  <script>
+    // Dynamically change header text using jquery
+    $("h1").html("Average Housing Rental Prices in US");
+
+    var options = {
+      center: [38.78, -101.85],
+      zoom: 4,
+      zoomsnap: 0.1,
+      zoomControl: false
+    }
+
+    var map = L.map('map', options);
+
+
+    //Declare variables to access property values
+    var countyName = "NAME",
+      rentPrice = "RENT";
+
+    //Provide URL path to data and callback function as arguments
+    $.getJSON("data/counties_median_rent_2015.json", function(data) {
+
+      //Initial styling option before classificaiton
+      var dataLayer = L.geoJson(data, {
+        style: function(feature) {
+          return {
+            color: '#dddddd',
+            weight: 1,
+            fillOpacity: 1,
+            fillColor: '#1f78b4'
+          };
+        },
+        //tooltip for county name and average rent price
+        onEachFeature: function (feature, layer) {
+          layer.bindTooltip("<b>"+ feature.properties[countyName] + " County </b><br>"
+                        + "Rent Price: $"+ feature.properties[rentPrice])
+        }
+      }).addTo(map);
+      //passing dataLayer defined above to new drawmap function
+      drawMap(dataLayer);
+    }); //end of getJSON
+
+    //drawMap function will call getClassBreaks which will determine the range
+    //of values within the dataset
+    function drawMap(dataLayer) {
+
+      //call getClassBreaks and assign to variable breaks
+      var breaks = getClassBreaks(dataLayer);
+
+      dataLayer.eachLayer(function(layer) {
+
+        //props variable will be reference below to shorthand accessing properties
+        var props = layer.feature.properties;
+
+        layer.setStyle({
+          fillColor: getColor(props[rentPrice], breaks)
+        });
+      });
+      drawLegend(breaks);
+    }
+
+    //function will determine the breaks in classfications
+    function getClassBreaks(dataLayer) {
+
+      //create array to store classifications
+      var values = [];
+
+      //loop through all counties
+      dataLayer.eachLayer(function(layer) {
+        var props = layer.feature.properties;
+        var value = props[rentPrice];
+        values.push(value);
+      });
+
+      // Testing field type of values
+      console.log(typeof(values[0]));
+
+      // Convert values array to Number
+      for (i=0; i < values.length; i++){
+        values[i] = Number(values[i]);
+      };
+
+      //Testing field type of values
+      console.log(typeof(values[0]));
+
+      // //Testing array before filter
+      // console.log(values);
+
+      //remove null values from array before running cluster
+      values = values.filter(function(values){return values});
+      // //Testing array after filter
+      // console.log(values);
+
+      //determine similar clusters using ss
+      var clusters = ss.ckmeans(values, 7);
+
+      //create arrary of lowest value within each clusters
+      var breaks = clusters.map(function(cluster) {
+        return [cluster[0], cluster.pop()];
+      });
+
+      // Write array of classes to test
+      console.log(breaks);
+
+      //Test data type of arrary
+      console.log(typeof breaks[0][0])
+
+      return breaks; //returns array of each class break
+    } // end of getClassBreaks fucntion
+
+    //function accepts rent price and assigns a classificaiton
+    function getColor(d, breaks) {
+
+      if(d == 'null') {
+        console.log(d)
+      }
+
+      if (d <= breaks[0][1]) {
+        return '#edf8fb'
+      } else if (d <= breaks[1][1]) {
+        return '#ccece6';
+      } else if (d <= breaks[2][1]) {
+        return '#99d8c9';
+      } else if (d <= breaks[3][1]) {
+        return '#66c2a4';
+      } else if (d <= breaks[4][1]) {
+        return '#41ae76';
+      } else if (d <= breaks[5][1]) {
+        return '#238b45';
+      } else if (d <= breaks[6][1]) {
+        return '#005824';
+      }
+    } // end getColor
+
+    //function draws a dynamic legend
+
+    function drawLegend(breaks) {
+
+      // create a new Leaflet control object, and assign position
+      var legend = L.control({
+        position: 'bottomleft'
+      });
+
+      // when the legend is added to the map
+      legend.onAdd = function() {
+
+        // create a new HTML <div> element and give it a class name of "legend"
+        var div = L.DomUtil.create('div', 'legend');
+
+        // first append an <h3> tag to the div holding the current attribute
+        // and norm values (i.e., the mapped phenomena)
+        div.innerHTML = "<h3> Average County Rent Price</h3>";
+
+        // for each of our breaks
+        for (var i = 0; i < breaks.length; i++) {
+          // determine the color associated with each break value,
+          // including the lower range value
+          var color = getColor(breaks[i][0], breaks);
+
+          // concatenate a <span> tag styled with the color and the range values
+          // of that class and include a label with the low and a high ends of that class range
+          div.innerHTML +=
+            '<span style="background:' + color + '"></span> ' +
+            '<label>$' + breaks[i][0].toLocaleString() + ' &mdash; $' +
+            breaks[i][1].toLocaleString() + '</label>';
+        }
+
+        // return the populated div to be added to the map
+        return div;
+      };
+
+      // add the legend to the map
+      legend.addTo(map);
+    } // end of drawLegend function
+
+  </script>
+
+</body>
+
+</html>
